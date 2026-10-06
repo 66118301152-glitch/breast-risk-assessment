@@ -1,316 +1,315 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import liff from "@line/liff";
-import { createClient } from "@/utils/supabase/client";
+import { useState } from "react";
 
-type CurrentUser = {
-  id: string;
-  name: string;
-  email: string;
-};
+const riskFactors = [
+  {
+    id: 1,
+    title: "คนในครอบครัวเคยเป็นมะเร็งเต้านมหรือไม่",
+    detail:
+      "เช่น แม่ พี่สาว น้องสาว หรือลูกสาว เคยเป็นมะเร็งเต้านม",
+  },
+  {
+    id: 2,
+    title: "เคยเป็นโรคหรือเคยมีก้อนที่เต้านมหรือไม่",
+    detail:
+      "เช่น เคยมีก้อน เจ็บเต้านมผิดปกติ หรือเคยรักษาโรคเกี่ยวกับเต้านม",
+  },
+  {
+    id: 3,
+    title: "มีคนในตระกูลเป็นมะเร็งเต้านมหลายคนหรือไม่",
+    detail:
+      "เช่น ญาติพี่น้องหลายคนเคยเป็นมะเร็งเต้านมหรือมะเร็งรังไข่",
+  },
+  {
+    id: 4,
+    title: "ชอบกินอาหารมัน ๆ เป็นประจำหรือไม่",
+    detail:
+      "เช่น ของทอด หมูสามชั้น หนังไก่ หรืออาหารกะทิบ่อย ๆ",
+  },
+  {
+    id: 5,
+    title: "ไม่มีลูก หรือมีลูกคนแรกตอนอายุมากกว่า 30 ปีหรือไม่",
+    detail: "",
+  },
+  {
+    id: 6,
+    title: "มีประจำเดือนครั้งแรกตอนอายุน้อยกว่า 12 ปีหรือไม่",
+    detail: "",
+  },
+  {
+    id: 7,
+    title: "ประจำเดือนหมดตอนอายุมากกว่า 50 ปีหรือไม่",
+    detail: "",
+  },
+  {
+    id: 8,
+    title: "กินยาคุมกำเนิดติดต่อกันเกิน 5 ปีหรือไม่",
+    detail: "",
+  },
+];
 
-export default function HomePage() {
-  const router = useRouter();
+type RiskLevel = "low" | "medium" | "high";
 
-  const [user, setUser] = useState<CurrentUser | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function Home() {
+  const [checked, setChecked] = useState<number[]>([]);
+  const [result, setResult] = useState<RiskLevel | null>(null);
 
-  useEffect(() => {
-    const checkUserAndConsent = async () => {
-      const supabase = createClient();
+  const score = checked.length;
 
-      // 1. ตรวจสอบว่าล็อกอินหรือยัง
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        router.replace("/login");
-        return;
-      }
-
-      // 2. ตรวจสอบ Consent จาก Supabase
-      const {
-        data: consentData,
-        error: consentError,
-      } = await supabase
-        .from("consents")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("consent_given", true)
-        .limit(1);
-
-      if (consentError) {
-        console.error(
-          "Consent check error:",
-          consentError
-        );
-
-        setLoading(false);
-        return;
-      }
-
-      // 3. ถ้ายังไม่เคย Consent
-      if (!consentData || consentData.length === 0) {
-        router.replace("/consent");
-        return;
-      }
-
-      // 4. ผ่านทั้ง Login และ Consent
-      const name =
-        typeof user.user_metadata?.name === "string" &&
-        user.user_metadata.name.trim()
-          ? user.user_metadata.name.trim()
-          : user.email?.split("@")[0] || "ผู้ใช้งาน";
-
-      setUser({
-        id: user.id,
-        name,
-        email: user.email || "",
-      });
-
-      setLoading(false);
-    };
-
-    checkUserAndConsent();
-  }, [router]);
-const connectLine = async () => {
-  try {
-    await liff.init({
-      liffId: "2011794752-ucI4485q",
-    });
-
-    if (!liff.isLoggedIn()) {
-      liff.login();
-      return;
-    }
-
-    const profile = await liff.getProfile();
-
-    const supabase = createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      alert("กรุณาเข้าสู่ระบบก่อน");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("line_connections")
-      .upsert({
-        user_id: user.id,
-        line_user_id: profile.userId,
-      });
-
-    if (error) {
-      console.error(error);
-      alert("ไม่สามารถเชื่อม LINE ได้");
-      return;
-    }
-
-    alert("เชื่อม LINE สำเร็จแล้ว 🎉");
-
-  } catch (error) {
-    console.error(error);
-    alert("เกิดข้อผิดพลาดในการเชื่อม LINE");
-  }
-};
-  const logout = async () => {
-    const supabase = createClient();
-
-    await supabase.auth.signOut();
-
-    router.replace("/login");
-    router.refresh();
+  const toggleRisk = (id: number) => {
+    setChecked((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
+    );
   };
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-pink-50">
-        <div className="text-center">
-          <div className="text-5xl">🎀</div>
+  const calculateRisk = () => {
+    if (score >= 5) {
+      setResult("high");
+    } else if (score >= 3) {
+      setResult("medium");
+    } else {
+      setResult("low");
+    };
+  };
 
-          <p className="mt-4 font-semibold text-pink-500">
-            Breast Care
-          </p>
+  const resetAssessment = () => {
+    setChecked([]);
+    setResult(null);
+  };
 
-          <p className="mt-2 text-sm text-gray-400">
-            กำลังตรวจสอบข้อมูล...
-          </p>
-        </div>
-      </main>
-    );
-  }
+  const getResultData = () => {
+    if (result === "low") {
+      return {
+        title: "ความเสี่ยงระดับต่ำ",
+        scoreText: `พบปัจจัยเสี่ยง ${score} ข้อ`,
+        advice:
+          "ควรตรวจเต้านมด้วยตนเองเป็นประจำทุกเดือน และเข้ารับการตรวจโดยแพทย์หรือบุคลากรทางการแพทย์อย่างน้อยปีละ 1 ครั้ง",
+        bg: "bg-yellow-100",
+        border: "border-yellow-400",
+        titleColor: "text-yellow-700",
+        icon: "🌼",
+      };
+    }
 
-  if (!user) {
-    return null;
-  }
+    if (result === "medium") {
+      return {
+        title: "ความเสี่ยงระดับปานกลาง",
+        scoreText: `พบปัจจัยเสี่ยง ${score} ข้อ`,
+        advice:
+          "ควรปรึกษาแพทย์เพื่อวางแผนการตรวจคัดกรองเพิ่มเติม เช่น การทำแมมโมแกรม (Mammogram) ร่วมกับอัลตราซาวนด์ตามช่วงอายุที่เหมาะสม",
+        bg: "bg-orange-100",
+        border: "border-orange-400",
+        titleColor: "text-orange-700",
+        icon: "⚠️",
+      };
+    }
+
+    return {
+      title: "ความเสี่ยงระดับสูง",
+      scoreText: `พบปัจจัยเสี่ยง ${score} ข้อ`,
+      advice:
+        "แนะนำให้พบแพทย์ผู้เชี่ยวชาญเฉพาะทางเพื่อวางแผนการเฝ้าระวัง การตรวจคัดกรองอย่างใกล้ชิด และรับคำแนะนำในการปรับเปลี่ยนพฤติกรรมลดความเสี่ยง",
+      bg: "bg-red-100",
+      border: "border-red-400",
+      titleColor: "text-red-700",
+      icon: "❤️‍🩹",
+    };
+  };
 
   return (
-    <main className="min-h-screen bg-pink-50">
-      <div className="mx-auto max-w-md px-6 py-8">
+    <main className="min-h-screen bg-gradient-to-br from-pink-100 via-pink-50 to-white px-4 py-8">
+      <div className="mx-auto max-w-3xl">
 
-        {/* HEADER */}
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm font-semibold text-pink-500">
-              🎀 Breast Care
-            </p>
+        {/* Header */}
+        <div className="mb-6 text-center">
+          <div className="mb-3 text-5xl">🎀</div>
 
-            <h1 className="mt-2 text-2xl font-bold text-gray-900">
-              สวัสดี คุณ{user.name} 👋
-            </h1>
+          <h1 className="text-3xl font-bold text-pink-700 sm:text-4xl">
+            แบบประเมินความเสี่ยง
+          </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-              วันนี้อย่าลืมดูแลสุขภาพของตัวเองนะ
-            </p>
-          </div>
+          <h2 className="mt-2 text-2xl font-bold text-pink-600">
+            มะเร็งเต้านม
+          </h2>
 
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pink-100 text-xl font-bold text-pink-600">
-            {user.name.charAt(0).toUpperCase()}
-          </div>
-        </div>
-
-        {/* MAIN CARD */}
-        <div className="mt-8 overflow-hidden rounded-3xl bg-white shadow-md">
-          <div className="p-7">
-
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100 text-3xl">
-              🎀
-            </div>
-
-            <h2 className="mt-5 text-2xl font-bold text-gray-900">
-              การตรวจเต้านมด้วยตนเอง
-            </h2>
-
-            <p className="mt-3 text-sm leading-7 text-gray-600">
-              เรียนรู้และสังเกตความเปลี่ยนแปลงของเต้านม
-              ด้วยขั้นตอนที่เข้าใจง่าย พร้อมบันทึกผล
-              เพื่อดูประวัติย้อนหลังได้
-            </p>
-
-            <Link
-              href="/self-exam"
-              className="mt-6 block w-full rounded-2xl bg-pink-500 py-4 text-center font-semibold text-white shadow-md transition hover:bg-pink-600"
-            >
-              เริ่มตรวจเต้านม →
-            </Link>
-          </div>
-        </div>
-
-        {/* MENU */}
-        <h2 className="mt-8 font-bold text-gray-900">
-          เมนูของคุณ
-        </h2>
-
-        <div className="mt-4 grid grid-cols-2 gap-4">
-
-          {/* KNOWLEDGE */}
-          <Link
-            href="/knowledge"
-            className="rounded-3xl bg-white p-5 shadow-sm transition hover:shadow-md"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pink-50 text-2xl">
-              📖
-            </div>
-
-            <p className="mt-4 font-bold text-gray-800">
-              ความรู้
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-gray-500">
-              เรียนรู้เกี่ยวกับสุขภาพเต้านม
-            </p>
-
-            <p className="mt-4 text-xs font-semibold text-pink-500">
-              อ่านความรู้ →
-            </p>
-          </Link>
-
-          {/* HISTORY */}
-          <Link
-            href="/history"
-            className="rounded-3xl bg-white p-5 shadow-sm transition hover:shadow-md"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-pink-50 text-2xl">
-              📅
-            </div>
-
-            <p className="mt-4 font-bold text-gray-800">
-              ประวัติการตรวจ
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-gray-500">
-              ดูปฏิทินและผลย้อนหลัง
-            </p>
-
-            <p className="mt-4 text-xs font-semibold text-pink-500">
-              ดูประวัติ →
-            </p>
-          </Link>
-        </div>
-
-        {/* ACCOUNT */}
-        <div className="mt-8 rounded-3xl bg-white p-5 shadow-sm">
-
-          <p className="text-xs font-semibold text-gray-400">
-            บัญชีของฉัน
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-gray-600 sm:text-base">
+            โปรดอ่านคำถามแต่ละข้อ และทำเครื่องหมาย ✓
+            หากมีปัจจัยเสี่ยงตามที่ระบุ
           </p>
+        </div>
 
-          <div className="mt-3 flex items-center gap-3">
+        {/* Score indicator */}
+        <div className="sticky top-3 z-10 mb-5 rounded-2xl border border-pink-200 bg-white/95 p-4 shadow-md backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">
+                ปัจจัยเสี่ยงที่เลือก
+              </p>
 
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-100 font-bold text-pink-600">
-              {user.name.charAt(0).toUpperCase()}
+              <p className="text-2xl font-bold text-pink-600">
+                {score} <span className="text-base font-normal">/ 8 ข้อ</span>
+              </p>
             </div>
 
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-800">
-                {user.name}
-              </p>
-
-              <p className="truncate text-xs text-gray-400">
-                {user.email}
-              </p>
+            <div className="h-3 w-36 overflow-hidden rounded-full bg-pink-100 sm:w-52">
+              <div
+                className="h-full rounded-full bg-pink-500 transition-all duration-300"
+                style={{
+                  width: `${(score / 8) * 100}%`,
+                }}
+              />
             </div>
           </div>
-<button
-  onClick={connectLine}
-  className="mt-5 w-full rounded-2xl bg-green-500 py-3 text-sm font-semibold text-white transition hover:bg-green-600"
->
-  🔔 เชื่อม LINE เพื่อรับการแจ้งเตือน
-</button>
+        </div>
 
-<button
-  onClick={logout}
-  className="mt-3 w-full rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-500 transition hover:bg-gray-50"
->
-  ออกจากระบบ
-</button>
+        {/* Risk factors */}
+        <div className="space-y-4">
+          {riskFactors.map((factor) => {
+            const isChecked = checked.includes(factor.id);
+
+            return (
+              <label
+                key={factor.id}
+                className={`block cursor-pointer rounded-2xl border-2 bg-white p-5 shadow-sm transition-all duration-200 ${
+                  isChecked
+                    ? "border-pink-500 bg-pink-50 shadow-md"
+                    : "border-pink-100 hover:border-pink-300 hover:shadow-md"
+                }`}
+              >
+                <div className="flex gap-4">
+                  {/* Checkbox */}
+                  <div className="flex-shrink-0 pt-1">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleRisk(factor.id)}
+                      className="h-6 w-6 cursor-pointer accent-pink-600"
+                    />
+                  </div>
+
+                  {/* Text */}
+                  <div>
+                    <p className="text-base font-bold leading-7 text-gray-800 sm:text-lg">
+                      {factor.id}. {factor.title}
+                    </p>
+
+                    {factor.detail && (
+                      <p className="mt-1 text-sm leading-6 text-gray-500">
+                        {factor.detail}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* Buttons */}
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
           <button
-            onClick={logout}
-            className="mt-5 w-full rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-500 transition hover:bg-gray-50"
+            onClick={calculateRisk}
+            className="flex-1 rounded-2xl bg-pink-600 px-6 py-4 text-lg font-bold text-white shadow-lg transition hover:bg-pink-700 active:scale-[0.98]"
           >
-            ออกจากระบบ
+            🎀 ประเมินความเสี่ยง
+          </button>
+
+          <button
+            onClick={resetAssessment}
+            className="rounded-2xl border-2 border-pink-200 bg-white px-6 py-4 font-semibold text-pink-600 transition hover:bg-pink-50"
+          >
+            เริ่มใหม่
           </button>
         </div>
 
-        {/* DISCLAIMER */}
-        <div className="mt-8 rounded-2xl bg-pink-100/60 p-4">
-          <p className="text-center text-xs leading-5 text-gray-500">
-            Breast Care เป็นเครื่องมือช่วยให้ความรู้
-            บันทึก และสังเกตความเปลี่ยนแปลงของเต้านม
-            ไม่ใช่เครื่องมือสำหรับวินิจฉัยโรค
+        {/* Information */}
+        <div className="mt-6 rounded-2xl bg-pink-50 p-5 text-sm leading-7 text-gray-600">
+          <p className="font-bold text-pink-700">
+            เกณฑ์การสรุประดับความเสี่ยง
           </p>
+
+          <ul className="mt-2 space-y-1">
+            <li>🟡 1–2 ข้อ = ความเสี่ยงระดับต่ำ</li>
+            <li>🟠 3–4 ข้อ = ความเสี่ยงระดับปานกลาง</li>
+            <li>🔴 5 ข้อขึ้นไป = ความเสี่ยงระดับสูง</li>
+          </ul>
         </div>
 
+        <p className="mt-5 text-center text-xs leading-5 text-gray-400">
+          แบบประเมินนี้จัดทำเพื่อใช้ในการประเมินปัจจัยเสี่ยงเบื้องต้น
+          ไม่ใช้แทนการวินิจฉัยจากแพทย์
+        </p>
       </div>
+
+      {/* RESULT MODAL */}
+      {result && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+
+            {/* Modal Header */}
+            <div className="bg-pink-600 px-6 py-5 text-center text-white">
+              <div className="text-4xl">
+                {getResultData().icon}
+              </div>
+
+              <h2 className="mt-2 text-2xl font-bold">
+                ผลการประเมิน
+              </h2>
+            </div>
+
+            {/* Result */}
+            <div className="p-6">
+
+              <div
+                className={`rounded-2xl border-2 p-5 text-center ${getResultData().bg} ${getResultData().border}`}
+              >
+                <p
+                  className={`text-2xl font-bold ${getResultData().titleColor}`}
+                >
+                  {getResultData().title}
+                </p>
+
+                <p className="mt-2 text-xl font-bold text-gray-800">
+                  คะแนน {score} / 8
+                </p>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  {getResultData().scoreText}
+                </p>
+              </div>
+
+              {/* Advice */}
+              <div className="mt-5">
+                <h3 className="font-bold text-gray-800">
+                  คำแนะนำ
+                </h3>
+
+                <p className="mt-2 text-sm leading-7 text-gray-600">
+                  {getResultData().advice}
+                </p>
+              </div>
+
+              {/* Close */}
+              <button
+                onClick={() => setResult(null)}
+                className="mt-6 w-full rounded-2xl bg-pink-600 py-3.5 font-bold text-white transition hover:bg-pink-700"
+              >
+                ปิด
+              </button>
+
+              <button
+                onClick={resetAssessment}
+                className="mt-2 w-full rounded-2xl border border-pink-200 py-3 text-sm font-semibold text-pink-600 transition hover:bg-pink-50"
+              >
+                ทำแบบประเมินใหม่
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
